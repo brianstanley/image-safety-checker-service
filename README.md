@@ -1,21 +1,44 @@
 # Safe Checker API
 
-A TypeScript-based Express API for checking explicit content in images using multiple services (Google Cloud Vision and SightEngine).
+API for checking explicit content in images using Sightengine and AWS Rekognition services.
 
 ## Features
 
-- 🔐 API Key authentication
-- 📸 Image moderation content checking using multiple services
-- 📊 Usage tracking and limits
-- 🔄 Dynamic service selection based on usage
-- 🛡️ Admin endpoints for usage management
+- Image content moderation using Sightengine and AWS Rekognition
+- Automatic service fallback when limits are reached
+- Usage tracking and limits enforcement
+- MIME type validation (JPG/PNG)
+- API key authentication
+- Detailed error handling and logging
 
 ## Prerequisites
 
-- Node.js (v14 or higher)
-- MongoDB Atlas account
-- Google Cloud Vision API key
-- SightEngine API credentials
+- Node.js >= 18.0.0
+- MongoDB
+- Sightengine API credentials
+- AWS Rekognition credentials
+
+## Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```env
+# Server
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017/safe-checker
+
+# API Authentication
+API_KEY=your-api-key-here
+
+# Sightengine
+SIGHTENGINE_API_KEY=your-sightengine-api-key
+SIGHTENGINE_API_SECRET=your-sightengine-api-secret
+
+# AWS Rekognition
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=us-east-1
+```
 
 ## Installation
 
@@ -30,81 +53,146 @@ cd safe-checker
 npm install
 ```
 
-3. Create a `.env` file in the root directory with the following variables:
-```env
-PORT=3000
-MONGODB_URI=your_mongodb_uri
-API_KEYS=["your-api-key-1", "your-api-key-2"]
-GOOGLE_CLOUD_API_KEY=your_google_cloud_api_key
-SIGHTENGINE_API_KEY=your_sightengine_api_key
-SIGHTENGINE_API_SECRET=your_sightengine_api_secret
-ADMIN_API_KEY=your_admin_api_key
-```
-
-## Usage
-
-### Development
+3. Start the development server:
 ```bash
 npm run dev
 ```
 
-### Production
-```bash
-npm run build
-npm start
-```
-
 ## API Endpoints
 
-### Check Image
+### Check Image Content
+
+Default request (automatic provider selection):
 ```http
-POST /api/check-image
-Headers:
-  x-api-key: your-api-key
-Body:
+POST /api/images/check
+Content-Type: application/json
+x-api-key: test-key-1
+
 {
   "imageUrl": "https://example.com/image.jpg"
 }
 ```
 
+Request with specific provider:
+```http
+POST /api/images/check
+Content-Type: application/json
+x-api-key: test-key-1
+
+{
+  "imageUrl": "https://example.com/image.jpg",
+  "service": "rekognition"
+}
+```
+
+Available providers:
+- `sightengine`: Uses Sightengine API
+- `rekognition`: Uses AWS Rekognition
+
+Response (Safe Image):
+```json
+{
+  "success": true,
+  "is_safe": true,
+  "reason": null,
+  "provider": "sightengine",
+  "imageUrl": "https://example.com/image.jpg"
+}
+```
+
+Response (Unsafe Image):
+```json
+{
+  "success": true,
+  "is_safe": false,
+  "reason": "nudity",
+  "provider": "sightengine",
+  "imageUrl": "https://example.com/unsafe-image.jpg"
+}
+```
+
+Possible reasons for unsafe content:
+- `nudity`: Explicit nudity or sexual content
+- `suggestive`: Suggestive content (excluding swimwear/bikini)
+- `violence`: Violent content
+- `gore`: Blood or gore
+- `hate`: Hate symbols or content
+- `other`: Other unsafe content
+
+### Get Usage Statistics
+
+```http
+GET /api/images/usage
+x-api-key: test-key-1
+```
+
 Response:
 ```json
 {
-  "safe": true,
-  "source": "google",
-  "confidence": 0.97
+  "success": true,
+  "data": {
+    "sightengine": {
+      "daily": 123,
+      "monthly": 456
+    },
+    "rekognition": {
+      "daily": 789,
+      "monthly": 1011
+    }
+  }
 }
 ```
 
-### Reset Usage (Admin)
-```http
-POST /api/admin/reset-usage
-Headers:
-  x-admin-key: your-admin-key
-Body:
+## Error Responses
+
+### Validation Error
+```json
 {
-  "serviceName": "google",
-  "month": "2024-03"
+  "success": false,
+  "error": "Validation error",
+  "details": [
+    {
+      "field": "imageUrl",
+      "message": "imageUrl is required"
+    }
+  ]
 }
 ```
 
-## Error Handling
+### Service Limit Reached
+```json
+{
+  "success": false,
+  "error": "Sightengine daily or monthly limit reached"
+}
+```
 
-The API returns appropriate HTTP status codes and error messages:
+## Usage Limits
 
-- 400: Bad Request
-- 401: Unauthorized
-- 404: Not Found
-- 500: Internal Server Error
+- Sightengine:
+  - Daily: 500 requests
+  - Monthly: 2000 requests
+- AWS Rekognition:
+  - Monthly: 4000 requests
 
-## Contributing
+The API automatically switches to AWS Rekognition when Sightengine limits are reached.
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+## Development
+
+```bash
+# Run in development mode
+npm run dev
+
+# Build for production
+npm run build
+
+# Run in production mode
+npm start
+
+# Run tests
+npm test
+```
 
 ## License
 
-This project is licensed under the MIT License. 
+MIT 
