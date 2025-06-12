@@ -7,20 +7,21 @@ import { ImageCheckResponse } from '../types';
 const router = Router();
 
 // Schema for image check request
-const imageCheckSchema = z.object({
+const checkImageSchema = z.object({
   imageUrl: z.string({
-    required_error: "imageUrl is required",
-    invalid_type_error: "imageUrl must be a string"
-  }).url("Please provide a valid URL for the image")
+    required_error: 'Image URL is required',
+    invalid_type_error: 'Image URL must be a string'
+  }).url('Invalid URL format'),
+  service: z.enum(['sightengine', 'rekognition']).optional()
 });
 
 // POST /api/images/check - Check an image for explicit content
 router.post('/check', async (req, res) => {
   try {
-    const { imageUrl } = await imageCheckSchema.parseAsync(req.body);
+    const { imageUrl, service } = await checkImageSchema.parseAsync(req.body);
     
     // Get result from appropriate service
-    const result: ImageCheckResponse = await imageService.checkImage({ imageUrl });
+    const result: ImageCheckResponse = await imageService.checkImage({ imageUrl, service });
 
     res.json(result);
   } catch (error) {
@@ -37,7 +38,7 @@ router.post('/check', async (req, res) => {
     }
     res.status(500).json({
       success: false,
-      error: 'Error checking image'
+      error: 'Internal server error'
     });
   }
 });
