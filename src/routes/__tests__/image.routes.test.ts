@@ -1,6 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import imageRoutes from '../image.routes';
+import v1Routes from '../v1';
 import { validateApiKey } from '../../middleware/auth.middleware';
 import { imageService } from '../../services/image.service';
 import { UsageTracker } from '../../services/UsageTracker';
@@ -13,7 +13,7 @@ jest.mock('../../services/UsageTracker');
 const originalConsoleError = console.error;
 console.error = jest.fn();
 
-describe('Image Routes', () => {
+describe('Image Routes v1', () => {
   let app: express.Application;
 
   beforeEach(() => {
@@ -23,7 +23,7 @@ describe('Image Routes', () => {
     // Setup Express app
     app = express();
     app.use(express.json());
-    app.use('/api/images', validateApiKey, imageRoutes);
+    app.use('/api/v1', validateApiKey, v1Routes);
 
     // Mock successful responses
     (imageService.checkImage as jest.Mock).mockResolvedValue({
@@ -31,7 +31,8 @@ describe('Image Routes', () => {
       is_safe: true,
       reason: null,
       provider: 'sightengine',
-      imageUrl: 'https://example.com/image.jpg'
+      imageUrl: 'https://example.com/image.jpg',
+      score: 0.1
     });
 
     (UsageTracker.getServiceUsage as jest.Mock).mockResolvedValue({
@@ -45,10 +46,10 @@ describe('Image Routes', () => {
     console.error = originalConsoleError;
   });
 
-  describe('POST /api/images/check', () => {
+  describe('POST /api/v1/images/check', () => {
     it('should return 401 without API key', async () => {
       const response = await request(app)
-        .post('/api/images/check')
+        .post('/api/v1/images/check')
         .send({ imageUrl: 'https://example.com/image.jpg' });
 
       expect(response.status).toBe(401);
@@ -60,7 +61,7 @@ describe('Image Routes', () => {
 
     it('should return 400 with invalid image URL', async () => {
       const response = await request(app)
-        .post('/api/images/check')
+        .post('/api/v1/images/check')
         .set('x-api-key', 'test-key-1')
         .send({ imageUrl: 'invalid-url' });
 
@@ -71,7 +72,7 @@ describe('Image Routes', () => {
 
     it('should return 400 without image URL', async () => {
       const response = await request(app)
-        .post('/api/images/check')
+        .post('/api/v1/images/check')
         .set('x-api-key', 'test-key-1')
         .send({});
 
@@ -86,13 +87,14 @@ describe('Image Routes', () => {
         is_safe: true,
         reason: null,
         provider: 'sightengine',
-        imageUrl: 'https://example.com/image.jpg'
+        imageUrl: 'https://example.com/image.jpg',
+        score: 0.1
       };
 
       (imageService.checkImage as jest.Mock).mockResolvedValue(mockResponse);
 
       const response = await request(app)
-        .post('/api/images/check')
+        .post('/api/v1/images/check')
         .set('x-api-key', 'test-key-1')
         .send({ imageUrl: 'https://example.com/image.jpg' });
 
@@ -108,7 +110,7 @@ describe('Image Routes', () => {
       (imageService.checkImage as jest.Mock).mockRejectedValue(error);
 
       const response = await request(app)
-        .post('/api/images/check')
+        .post('/api/v1/images/check')
         .set('x-api-key', 'test-key-1')
         .send({ imageUrl: 'https://example.com/image.jpg' });
 
@@ -121,10 +123,10 @@ describe('Image Routes', () => {
     });
   });
 
-  describe('GET /api/images/usage', () => {
+  describe('GET /api/v1/images/usage', () => {
     it('should return 401 without API key', async () => {
       const response = await request(app)
-        .get('/api/images/usage');
+        .get('/api/v1/images/usage');
 
       expect(response.status).toBe(401);
       expect(response.body).toEqual({
@@ -150,7 +152,7 @@ describe('Image Routes', () => {
         .mockResolvedValueOnce(mockStats.rekognition);
 
       const response = await request(app)
-        .get('/api/images/usage')
+        .get('/api/v1/images/usage')
         .set('x-api-key', 'test-key-1');
 
       expect(response.status).toBe(200);
@@ -165,7 +167,7 @@ describe('Image Routes', () => {
       (UsageTracker.getServiceUsage as jest.Mock).mockRejectedValue(error);
 
       const response = await request(app)
-        .get('/api/images/usage')
+        .get('/api/v1/images/usage')
         .set('x-api-key', 'test-key-1');
 
       expect(response.status).toBe(500);

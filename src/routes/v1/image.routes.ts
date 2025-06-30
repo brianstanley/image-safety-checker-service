@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { imageService } from '../services/image.service';
-import { UsageTracker } from '../services/UsageTracker';
-import { ImageCheckResponse } from '../types';
+import { imageService } from '../../services/image.service';
+import { UsageTracker } from '../../services/UsageTracker';
+import { ImageCheckResponse } from '../../types';
 
 const router = Router();
 
@@ -15,7 +15,7 @@ const checkImageSchema = z.object({
   service: z.enum(['sightengine', 'rekognition']).optional()
 });
 
-// POST /api/images/check - Check an image for explicit content
+// POST /v1/images/check - Check an image for explicit content
 router.post('/check', async (req, res) => {
   try {
     const { imageUrl, service } = await checkImageSchema.parseAsync(req.body);
@@ -43,7 +43,7 @@ router.post('/check', async (req, res) => {
   }
 });
 
-// GET /api/images/usage - Get usage statistics for both services
+// GET /v1/images/usage - Get usage statistics for both services
 router.get('/usage', async (req, res) => {
   try {
     const [sightengineStats, rekognitionStats] = await Promise.all([

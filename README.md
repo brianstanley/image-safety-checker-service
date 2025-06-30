@@ -10,10 +10,12 @@ API for checking explicit content in images using Sightengine and AWS Rekognitio
 - MIME type validation (JPG/PNG)
 - API key authentication
 - Detailed error handling and logging
+- **API versioning** with `/api/v1/` endpoints
+- **Confidence scores** for content detection
 
 ## Prerequisites
 
-- Node.js >= 18.0.0
+- Node.js >= 22.0.0
 - MongoDB
 - Sightengine API credentials
 - AWS Rekognition credentials
@@ -60,11 +62,18 @@ npm run dev
 
 ## API Endpoints
 
+### API Versioning
+
+The API now supports versioning. All endpoints are prefixed with `/api/v1/`:
+
+- **Current version**: `/api/v1/`
+- **Legacy endpoints**: `/api/images/*` and `/api/admin/*` (redirect to v1)
+
 ### Check Image Content
 
 Default request (automatic provider selection):
 ```http
-POST /api/images/check
+POST /api/v1/images/check
 Content-Type: application/json
 x-api-key: test-key-1
 
@@ -75,7 +84,7 @@ x-api-key: test-key-1
 
 Request with specific provider:
 ```http
-POST /api/images/check
+POST /api/v1/images/check
 Content-Type: application/json
 x-api-key: test-key-1
 
@@ -96,7 +105,8 @@ Response (Safe Image):
   "is_safe": true,
   "reason": null,
   "provider": "sightengine",
-  "imageUrl": "https://example.com/image.jpg"
+  "imageUrl": "https://example.com/image.jpg",
+  "score": 0.1
 }
 ```
 
@@ -107,22 +117,23 @@ Response (Unsafe Image):
   "is_safe": false,
   "reason": "nudity",
   "provider": "sightengine",
-  "imageUrl": "https://example.com/unsafe-image.jpg"
+  "imageUrl": "https://example.com/unsafe-image.jpg",
+  "score": 0.85
 }
 ```
 
-Possible reasons for unsafe content:
-- `nudity`: Explicit nudity or sexual content
-- `suggestive`: Suggestive content (excluding swimwear/bikini)
-- `violence`: Violent content
-- `gore`: Blood or gore
-- `hate`: Hate symbols or content
-- `other`: Other unsafe content
+### Score Interpretation
+
+The `score` field represents the confidence/probability of inappropriate content:
+
+- **0.0 - 0.3**: Low probability of inappropriate content
+- **0.3 - 0.7**: Moderate probability
+- **0.7 - 1.0**: High probability of inappropriate content
 
 ### Get Usage Statistics
 
 ```http
-GET /api/images/usage
+GET /api/v1/images/usage
 x-api-key: test-key-1
 ```
 
@@ -132,14 +143,31 @@ Response:
   "success": true,
   "data": {
     "sightengine": {
-      "daily": 123,
-      "monthly": 456
+      "daily": { "count": 123, "limit": 500 },
+      "monthly": { "count": 456, "limit": 2000 }
     },
     "rekognition": {
-      "daily": 789,
-      "monthly": 1011
+      "daily": { "count": 789, "limit": 1000 },
+      "monthly": { "count": 1011, "limit": 4000 }
     }
   }
+}
+```
+
+### Admin Endpoints
+
+#### Reset Usage Statistics
+```http
+POST /api/v1/admin/reset-usage
+x-api-key: test-key-1
+x-admin-key: admin-key-here
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Usage statistics reset successfully"
 }
 ```
 
@@ -191,6 +219,27 @@ npm start
 
 # Run tests
 npm test
+```
+
+## API Information
+
+Visit the root endpoint to get API information:
+
+```http
+GET /
+```
+
+Response:
+```json
+{
+  "name": "Safe Checker API",
+  "version": "1.0.0",
+  "endpoints": {
+    "v1": "/api/v1",
+    "health": "/health"
+  },
+  "documentation": "API documentation coming soon"
+}
 ```
 
 ## License
