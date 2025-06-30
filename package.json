@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Image safety checking API using Sightengine and AWS Rekognition",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
