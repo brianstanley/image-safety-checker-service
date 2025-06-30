@@ -60,7 +60,8 @@ describe('ImageService', () => {
         is_safe: true,
         reason: null,
         provider: 'sightengine',
-        imageUrl: mockImageUrl
+        imageUrl: mockImageUrl,
+        score: 0.1
       });
       expect(UsageTracker.incrementUsage).toHaveBeenCalledWith(SERVICES.SIGHTENGINE);
     });
@@ -82,7 +83,8 @@ describe('ImageService', () => {
         is_safe: true,
         reason: null,
         provider: 'rekognition',
-        imageUrl: mockImageUrl
+        imageUrl: mockImageUrl,
+        score: 0
       });
       expect(UsageTracker.incrementUsage).toHaveBeenCalledWith(SERVICES.REKOGNITION);
     });
@@ -114,7 +116,8 @@ describe('ImageService', () => {
         is_safe: true,
         reason: null,
         provider: 'rekognition',
-        imageUrl: mockImageUrl
+        imageUrl: mockImageUrl,
+        score: 0
       });
       expect(UsageTracker.incrementUsage).toHaveBeenCalledWith(SERVICES.REKOGNITION);
     });
@@ -150,7 +153,8 @@ describe('ImageService', () => {
         is_safe: false,
         reason: 'nudity',
         provider: 'sightengine',
-        imageUrl: mockImageUrl
+        imageUrl: mockImageUrl,
+        score: 0.8
       });
     });
 
@@ -178,7 +182,8 @@ describe('ImageService', () => {
         is_safe: false,
         reason: 'nudity',
         provider: 'rekognition',
-        imageUrl: mockImageUrl
+        imageUrl: mockImageUrl,
+        score: 0.9
       });
     });
   });

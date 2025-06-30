@@ -110,6 +110,20 @@ class ImageService {
     // Consider it safe if it's just swimwear/bikini and has no explicit content
     const is_safe = !(hasExplicitNudity || (hasSuggestiveContent && !isJustSwimwear) || hasViolence || hasGore || hasHate || hasOther);
 
+    // Calculate the highest score for unsafe content
+    const scores = [
+      nudity.sexual_activity ?? 0,
+      nudity.sexual_display ?? 0,
+      nudity.erotica ?? 0,
+      nudity.very_suggestive ?? 0,
+      nudity.suggestive ?? 0,
+      nudity.mildly_suggestive ?? 0,
+      ...Object.values(offensive).filter(v => typeof v === 'number') as number[],
+      gore.prob ?? 0,
+      scam.prob ?? 0
+    ];
+    const score = Math.max(...scores);
+
     // Determine the reason if not safe
     let reason = null;
     if (!is_safe) {
@@ -126,7 +140,8 @@ class ImageService {
       is_safe,
       reason,
       provider: 'sightengine',
-      imageUrl
+      imageUrl,
+      score
     };
   }
 
@@ -215,6 +230,12 @@ class ImageService {
 
     const is_safe = unsafeLabels.length === 0;
 
+    // Calculate the highest confidence score for unsafe content
+    // Convert from 0-100 scale to 0-1 scale to match Sightengine
+    const score = unsafeLabels.length > 0 
+      ? Math.max(...unsafeLabels.map((label: any) => label.Confidence)) / 100
+      : 0;
+
     // Determine the reason if not safe
     let reason = null;
     if (!is_safe) {
@@ -252,7 +273,8 @@ class ImageService {
       is_safe,
       reason,
       provider: 'rekognition',
-      imageUrl
+      imageUrl,
+      score
     };
   }
 

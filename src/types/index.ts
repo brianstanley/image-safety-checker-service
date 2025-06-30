@@ -8,6 +8,7 @@ export interface ImageCheckResponse {
   reason: 'nudity' | 'suggestive' | 'violence' | 'gore' | 'hate' | 'other' | null;
   provider: 'sightengine' | 'rekognition';
   imageUrl: string;
+  score: number;
 }
 
 export interface Usage {
