@@ -108,15 +108,94 @@ For backward compatibility, the old endpoints are still available and will redir
 
 ## Error Responses
 
-All endpoints return consistent error responses:
+The API now provides detailed error responses with specific error types and appropriate HTTP status codes.
 
+### Error Response Format
 ```json
 {
   "success": false,
   "error": "Error message",
+  "errorType": "error_category",
+  "provider": "sightengine|rekognition", // optional
+  "imageUrl": "https://example.com/image.jpg", // optional
   "details": [] // optional validation details
 }
 ```
+
+### Error Types
+
+#### Validation Errors (400)
+```json
+{
+  "success": false,
+  "error": "Validation error",
+  "errorType": "validation",
+  "details": [
+    {
+      "field": "imageUrl",
+      "message": "Invalid URL format"
+    }
+  ]
+}
+```
+
+#### Image Not Found (404)
+```json
+{
+  "success": false,
+  "error": "Image not found or inaccessible: https://example.com/nonexistent.jpg",
+  "errorType": "image_not_found",
+  "provider": "sightengine",
+  "imageUrl": "https://example.com/nonexistent.jpg"
+}
+```
+
+#### Rate Limit Exceeded (429)
+```json
+{
+  "success": false,
+  "error": "sightengine rate limit exceeded",
+  "errorType": "rate_limit",
+  "provider": "sightengine"
+}
+```
+
+#### Service Unavailable (503)
+```json
+{
+  "success": false,
+  "error": "sightengine service is currently unavailable: Network error",
+  "errorType": "service_unavailable",
+  "provider": "sightengine"
+}
+```
+
+#### Authentication Error (401)
+```json
+{
+  "success": false,
+  "error": "sightengine authentication failed",
+  "errorType": "authentication",
+  "provider": "sightengine"
+}
+```
+
+#### Internal Server Error (500)
+```json
+{
+  "success": false,
+  "error": "Internal server error",
+  "errorType": "internal"
+}
+```
+
+### Common Error Scenarios
+
+1. **Image URL doesn't exist**: Returns 404 with `image_not_found` error type
+2. **Invalid image URL format**: Returns 400 with `validation` error type
+3. **Service rate limit reached**: Returns 429 with `rate_limit` error type
+4. **Service temporarily unavailable**: Returns 503 with `service_unavailable` error type
+5. **Authentication issues**: Returns 401 with `authentication` error type
 
 ## Authentication
 

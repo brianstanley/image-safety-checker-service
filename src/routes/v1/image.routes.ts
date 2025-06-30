@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { imageService } from '../../services/image.service';
 import { UsageTracker } from '../../services/UsageTracker';
 import { ImageCheckResponse } from '../../types';
+import { ImageServiceError } from '../../services/ImageServiceError';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const checkImageSchema = z.object({
   service: z.enum(['sightengine', 'rekognition']).optional()
 });
 
-// POST /v1/images/check - Check an image for explicit content
+// POST /api/v1/images/check - Check an image for explicit content
 router.post('/check', async (req, res) => {
   try {
     const { imageUrl, service } = await checkImageSchema.parseAsync(req.body);
@@ -26,24 +27,36 @@ router.post('/check', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error checking image:', error);
+    
+    // Handle validation errors
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         error: 'Validation error',
+        errorType: 'validation',
         details: error.errors.map(err => ({
           field: err.path.join('.'),
           message: err.message
         }))
       });
     }
+
+    // Handle our custom ImageServiceError
+    if (error instanceof ImageServiceError) {
+      const errorResponse = error.toDetailedResponse();
+      return res.status(error.statusCode).json(errorResponse);
+    }
+
+    // Handle unknown errors
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
+      errorType: 'internal'
     });
   }
 });
 
-// GET /v1/images/usage - Get usage statistics for both services
+// GET /api/v1/images/usage - Get usage statistics for both services
 router.get('/usage', async (req, res) => {
   try {
     const [sightengineStats, rekognitionStats] = await Promise.all([
@@ -62,7 +75,8 @@ router.get('/usage', async (req, res) => {
     console.error('Error getting usage stats:', error);
     res.status(500).json({
       success: false,
-      error: 'Error getting usage stats'
+      error: 'Error getting usage stats',
+      errorType: 'internal'
     });
   }
 });

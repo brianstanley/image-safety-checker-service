@@ -3,6 +3,7 @@ import { UsageTracker } from '../UsageTracker';
 import axios from 'axios';
 import { RekognitionClient } from '@aws-sdk/client-rekognition';
 import { SERVICES } from '../../constants';
+import { ImageServiceError } from '../ImageServiceError';
 
 // Mock external dependencies
 jest.mock('axios');
@@ -96,7 +97,7 @@ describe('ImageService', () => {
 
       await expect(imageService.checkImage({ imageUrl: mockImageUrl }))
         .rejects
-        .toThrow('All services have reached their usage limits');
+        .toThrow('sightengine rate limit exceeded');
     });
 
     it('should use specified service when provided', async () => {
@@ -120,6 +121,45 @@ describe('ImageService', () => {
         score: 0
       });
       expect(UsageTracker.incrementUsage).toHaveBeenCalledWith(SERVICES.REKOGNITION);
+    });
+
+    it('should throw ImageServiceError when image is not found with Sightengine', async () => {
+      // Mock Sightengine error response
+      const mockSightengineErrorResponse = {
+        data: {
+          error: 'invalid_url'
+        }
+      };
+      (axios.get as jest.Mock).mockResolvedValue(mockSightengineErrorResponse);
+
+      await expect(imageService.checkImage({ 
+        imageUrl: mockImageUrl,
+        service: SERVICES.SIGHTENGINE
+      }))
+        .rejects
+        .toThrow('Image not found or inaccessible: https://example.com/test-image.jpg');
+    });
+
+    it('should throw ImageServiceError when image download fails', async () => {
+      // Mock axios error for image download
+      const axiosError = {
+        isAxiosError: true,
+        response: { status: 404 },
+        code: 'ENOTFOUND'
+      };
+      (axios as unknown as jest.Mock).mockImplementation((config) => {
+        if (config.responseType === 'arraybuffer') {
+          return Promise.reject(axiosError);
+        }
+        return Promise.resolve({ data: {} });
+      });
+
+      await expect(imageService.checkImage({ 
+        imageUrl: mockImageUrl,
+        service: SERVICES.REKOGNITION
+      }))
+        .rejects
+        .toThrow('Image not found or inaccessible: https://example.com/test-image.jpg');
     });
   });
 

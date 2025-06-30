@@ -4,6 +4,7 @@ import v1Routes from '../v1';
 import { validateApiKey } from '../../middleware/auth.middleware';
 import { imageService } from '../../services/image.service';
 import { UsageTracker } from '../../services/UsageTracker';
+import { ImageServiceError } from '../../services/ImageServiceError';
 
 // Mock the services
 jest.mock('../../services/image.service');
@@ -68,6 +69,7 @@ describe('Image Routes v1', () => {
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('success', false);
       expect(response.body).toHaveProperty('error', 'Validation error');
+      expect(response.body).toHaveProperty('errorType', 'validation');
     });
 
     it('should return 400 without image URL', async () => {
@@ -79,6 +81,7 @@ describe('Image Routes v1', () => {
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('success', false);
       expect(response.body).toHaveProperty('error', 'Validation error');
+      expect(response.body).toHaveProperty('errorType', 'validation');
     });
 
     it('should accept valid request with API key', async () => {
@@ -105,6 +108,43 @@ describe('Image Routes v1', () => {
       });
     });
 
+    it('should handle image not found error', async () => {
+      const imageNotFoundError = ImageServiceError.imageNotFound('https://example.com/nonexistent.jpg', 'sightengine');
+      (imageService.checkImage as jest.Mock).mockRejectedValue(imageNotFoundError);
+
+      const response = await request(app)
+        .post('/api/v1/images/check')
+        .set('x-api-key', 'test-key-1')
+        .send({ imageUrl: 'https://example.com/nonexistent.jpg' });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        success: false,
+        error: 'Image not found or inaccessible: https://example.com/nonexistent.jpg',
+        errorType: 'image_not_found',
+        provider: 'sightengine',
+        imageUrl: 'https://example.com/nonexistent.jpg'
+      });
+    });
+
+    it('should handle rate limit error', async () => {
+      const rateLimitError = ImageServiceError.rateLimitExceeded('sightengine');
+      (imageService.checkImage as jest.Mock).mockRejectedValue(rateLimitError);
+
+      const response = await request(app)
+        .post('/api/v1/images/check')
+        .set('x-api-key', 'test-key-1')
+        .send({ imageUrl: 'https://example.com/image.jpg' });
+
+      expect(response.status).toBe(429);
+      expect(response.body).toEqual({
+        success: false,
+        error: 'sightengine rate limit exceeded',
+        errorType: 'rate_limit',
+        provider: 'sightengine'
+      });
+    });
+
     it('should handle service errors', async () => {
       const error = new Error('Service error');
       (imageService.checkImage as jest.Mock).mockRejectedValue(error);
@@ -117,7 +157,8 @@ describe('Image Routes v1', () => {
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
+        errorType: 'internal'
       });
       expect(console.error).toHaveBeenCalledWith('Error checking image:', error);
     });
@@ -173,7 +214,8 @@ describe('Image Routes v1', () => {
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
         success: false,
-        error: 'Error getting usage stats'
+        error: 'Error getting usage stats',
+        errorType: 'internal'
       });
       expect(console.error).toHaveBeenCalledWith('Error getting usage stats:', error);
     });

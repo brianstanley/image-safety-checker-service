@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { UsageTracker } from './UsageTracker';
 import { SERVICES, ServiceType } from '../constants';
+import { ImageServiceError } from './ImageServiceError';
 
 class ImageService {
   // Configurable thresholds
@@ -150,7 +151,7 @@ class ImageService {
     const apiSecret = process.env.SIGHTENGINE_API_SECRET;
 
     if (!apiKey || !apiSecret) {
-      throw new Error('Sightengine API credentials are not set in environment variables');
+      throw ImageServiceError.authenticationError('sightengine');
     }
 
     try {
@@ -163,6 +164,19 @@ class ImageService {
 
       const response = await axios.get('https://api.sightengine.com/1.0/check.json', { params });
       const data = response.data;
+
+      // Check for Sightengine-specific errors
+      if (data.error) {
+        if (data.error === 'invalid_url') {
+          throw ImageServiceError.imageNotFound(imageUrl, 'sightengine');
+        } else if (data.error === 'invalid_credentials') {
+          throw ImageServiceError.authenticationError('sightengine');
+        } else if (data.error === 'rate_limit') {
+          throw ImageServiceError.rateLimitExceeded('sightengine');
+        } else {
+          throw ImageServiceError.serviceUnavailable('sightengine', data.error);
+        }
+      }
 
       // Log raw Sightengine response
       console.log('Raw Sightengine Response:', JSON.stringify({
@@ -178,23 +192,66 @@ class ImageService {
       return normalized;
     } catch (error) {
       console.error('Sightengine API error:', error);
-      throw new Error('Failed to analyze image with Sightengine');
+      
+      // If it's already our custom error, re-throw it
+      if (error instanceof ImageServiceError) {
+        throw error;
+      }
+
+      // Handle axios errors
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          throw ImageServiceError.imageNotFound(imageUrl, 'sightengine');
+        } else if (error.response?.status === 401) {
+          throw ImageServiceError.authenticationError('sightengine');
+        } else if (error.response?.status === 429) {
+          throw ImageServiceError.rateLimitExceeded('sightengine');
+        } else if (error.response?.status && error.response.status >= 500) {
+          throw ImageServiceError.serviceUnavailable('sightengine', 'Server error');
+        } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+          throw ImageServiceError.serviceUnavailable('sightengine', 'Network error');
+        }
+      }
+
+      throw ImageServiceError.internalError('Failed to analyze image with Sightengine', 'sightengine');
     }
   }
 
   private async downloadImage(imageUrl: string): Promise<string> {
-    const response = await axios({
-      method: 'GET',
-      url: imageUrl,
-      responseType: 'arraybuffer'
-    });
+    try {
+      const response = await axios({
+        method: 'GET',
+        url: imageUrl,
+        responseType: 'arraybuffer',
+        timeout: 10000, // 10 second timeout
+        validateStatus: (status) => status < 400 // Only accept 2xx and 3xx status codes
+      });
 
-    const tempDir = os.tmpdir();
-    const fileName = `image-${Date.now()}.jpg`;
-    const filePath = path.join(tempDir, fileName);
+      const tempDir = os.tmpdir();
+      const fileName = `image-${Date.now()}.jpg`;
+      const filePath = path.join(tempDir, fileName);
 
-    await fs.promises.writeFile(filePath, response.data);
-    return filePath;
+      await fs.promises.writeFile(filePath, response.data);
+      return filePath;
+    } catch (error) {
+      console.error('Error downloading image:', error);
+      
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          throw ImageServiceError.imageNotFound(imageUrl);
+        } else if (error.response?.status && error.response.status >= 400 && error.response.status < 500) {
+          throw ImageServiceError.imageNotFound(imageUrl);
+        } else if (error.code === 'ENOTFOUND') {
+          throw ImageServiceError.imageNotFound(imageUrl);
+        } else if (error.code === 'ECONNREFUSED') {
+          throw ImageServiceError.serviceUnavailable('rekognition', 'Cannot connect to image server');
+        } else if (error.code === 'ETIMEDOUT') {
+          throw ImageServiceError.serviceUnavailable('rekognition', 'Image download timeout');
+        }
+      }
+      
+      throw ImageServiceError.imageNotFound(imageUrl);
+    }
   }
 
   private async cleanupTempFile(filePath: string): Promise<void> {
@@ -324,7 +381,31 @@ class ImageService {
 
     } catch (error) {
       console.error('Amazon Rekognition API error:', error);
-      throw new Error('Failed to analyze image with Amazon Rekognition');
+      
+      // If it's already our custom error, re-throw it
+      if (error instanceof ImageServiceError) {
+        throw error;
+      }
+
+      // Handle AWS-specific errors
+      if (error && typeof error === 'object' && 'name' in error) {
+        const awsError = error as { name: string };
+        if (awsError.name === 'InvalidParameterException') {
+          throw ImageServiceError.imageNotFound(imageUrl, 'rekognition');
+        } else if (awsError.name === 'InvalidImageFormatException') {
+          throw ImageServiceError.imageNotFound(imageUrl, 'rekognition');
+        } else if (awsError.name === 'ImageTooLargeException') {
+          throw ImageServiceError.serviceUnavailable('rekognition', 'Image too large');
+        } else if (awsError.name === 'AccessDeniedException') {
+          throw ImageServiceError.authenticationError('rekognition');
+        } else if (awsError.name === 'ThrottlingException') {
+          throw ImageServiceError.rateLimitExceeded('rekognition');
+        } else if (awsError.name === 'ServiceUnavailableException') {
+          throw ImageServiceError.serviceUnavailable('rekognition');
+        }
+      }
+
+      throw ImageServiceError.internalError('Failed to analyze image with Amazon Rekognition', 'rekognition');
     } finally {
       if (tempFilePath) {
         await this.cleanupTempFile(tempFilePath);
@@ -337,19 +418,19 @@ class ImageService {
     if (request.service) {
       const service = this.services.find(s => s.name === request.service);
       if (!service) {
-        throw new Error(`Service ${request.service} not found`);
+        throw ImageServiceError.serviceUnavailable(request.service as 'sightengine' | 'rekognition', 'Service not configured');
       }
 
       // Check if the requested service can be used
       if (request.service === SERVICES.SIGHTENGINE) {
         const canUseSightengine = await UsageTracker.canUseSightengine();
         if (!canUseSightengine) {
-          throw new Error('Sightengine daily or monthly limit reached');
+          throw ImageServiceError.rateLimitExceeded('sightengine');
         }
       } else if (request.service === SERVICES.REKOGNITION) {
         const canUseRekognition = await UsageTracker.canUseRekognition();
         if (!canUseRekognition) {
-          throw new Error('Rekognition monthly limit reached');
+          throw ImageServiceError.rateLimitExceeded('rekognition');
         }
       }
 
@@ -370,12 +451,14 @@ class ImageService {
         return await this.checkWithRekognition(request.imageUrl);
       }
 
-      throw new Error('All services have reached their usage limits');
+      throw ImageServiceError.rateLimitExceeded('sightengine');
     } catch (error) {
-      if (error instanceof Error) {
-        throw new Error(`Error checking image: ${error.message}`);
+      // If it's already our custom error, re-throw it
+      if (error instanceof ImageServiceError) {
+        throw error;
       }
-      throw new Error('Error checking image');
+      
+      throw ImageServiceError.internalError('Error checking image');
     }
   }
 
