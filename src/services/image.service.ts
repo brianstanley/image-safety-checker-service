@@ -281,7 +281,8 @@ class ImageService {
         'Exposed Female Genitalia',
         'Exposed Buttocks or Anus',
         'Explicit Sexual Activity',
-        'Sex Toys'
+        'Sex Toys',
+        'Obstructed Intimate Parts'
       ].includes(label.Name)
     );
 
