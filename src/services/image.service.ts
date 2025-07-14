@@ -206,6 +206,24 @@ class ImageService {
           throw ImageServiceError.authenticationError('sightengine');
         } else if (error.response?.status === 429) {
           throw ImageServiceError.rateLimitExceeded('sightengine');
+        } else if (error.response?.status === 400) {
+          // Check if it's a rate limit error in the response body
+          const responseData = error.response.data;
+          if (responseData && typeof responseData === 'object') {
+            // Check for rate limit errors in various possible formats
+            const errorMessage = typeof responseData.error === 'string' ? responseData.error : '';
+            const statusText = typeof responseData.statusText === 'string' ? responseData.statusText : '';
+            const message = typeof responseData.message === 'string' ? responseData.message : '';
+            
+            if (responseData.error === 'rate_limit' || 
+                statusText.includes('usage limit') ||
+                errorMessage.includes('usage limit') ||
+                message.includes('usage limit')) {
+              throw ImageServiceError.rateLimitExceeded('sightengine');
+            }
+          }
+          // If it's a 400 but not a rate limit, treat as service unavailable
+          throw ImageServiceError.serviceUnavailable('sightengine', 'Bad request');
         } else if (error.response?.status && error.response.status >= 500) {
           throw ImageServiceError.serviceUnavailable('sightengine', 'Server error');
         } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
@@ -444,9 +462,29 @@ class ImageService {
     try {
       const canUseSightengine = await UsageTracker.canUseSightengine();
       if (canUseSightengine) {
-        return await this.checkWithSightEngine(request.imageUrl);
+        try {
+          return await this.checkWithSightEngine(request.imageUrl);
+        } catch (sightengineError) {
+          console.log('Sightengine failed, attempting fallback to Rekognition:', sightengineError);
+          
+          // Check if Rekognition is available for fallback
+          const canUseRekognition = await UsageTracker.canUseRekognition();
+          if (canUseRekognition) {
+            try {
+              return await this.checkWithRekognition(request.imageUrl);
+            } catch (rekognitionError) {
+              console.error('Both Sightengine and Rekognition failed:', { sightengineError, rekognitionError });
+              // If both services fail, throw the original Sightengine error
+              throw sightengineError;
+            }
+          } else {
+            // If Rekognition is not available, throw the original Sightengine error
+            throw sightengineError;
+          }
+        }
       }
 
+      // If Sightengine is not available, try Rekognition
       const canUseRekognition = await UsageTracker.canUseRekognition();
       if (canUseRekognition) {
         return await this.checkWithRekognition(request.imageUrl);
