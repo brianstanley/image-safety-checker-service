@@ -157,7 +157,7 @@ class ImageService {
     try {
       const params = {
         url: imageUrl,
-        models: 'nudity-2.1,offensive-2.0,scam,gore-2.0',
+        models: 'nudity-2.1,gore-2.0', // Reduced to 2 models: nudity and gore cover most cases
         api_user: apiKey,
         api_secret: apiSecret
       };
@@ -188,7 +188,9 @@ class ImageService {
       }, null, 2));
 
       const normalized = this.normalizeSightengineResponse(data, imageUrl);
-      await UsageTracker.incrementUsage(SERVICES.SIGHTENGINE);
+      // SightEngine counts each model as a separate operation
+      // We're using 2 models: nudity-2.1, gore-2.0
+      await UsageTracker.incrementUsage(SERVICES.SIGHTENGINE, 2);
       return normalized;
     } catch (error) {
       console.error('Sightengine API error:', error);
@@ -215,10 +217,24 @@ class ImageService {
             const statusText = typeof responseData.statusText === 'string' ? responseData.statusText : '';
             const message = typeof responseData.message === 'string' ? responseData.message : '';
             
-            if (responseData.error === 'rate_limit' || 
-                statusText.includes('usage limit') ||
-                errorMessage.includes('usage limit') ||
-                message.includes('usage limit')) {
+            // Log the error response for debugging
+            console.log('Sightengine error response:', JSON.stringify(responseData, null, 2));
+            
+            // Check for various rate limit error messages
+            const isRateLimitError = 
+              responseData.error === 'rate_limit' || 
+              statusText.includes('usage limit') ||
+              statusText.includes('Daily usage limit') ||
+              statusText.includes('Free plan') ||
+              errorMessage.includes('usage limit') ||
+              errorMessage.includes('Daily usage limit') ||
+              errorMessage.includes('Free plan') ||
+              message.includes('usage limit') ||
+              message.includes('Daily usage limit') ||
+              message.includes('Free plan');
+            
+            if (isRateLimitError) {
+              console.log('Sightengine rate limit detected, switching to fallback');
               throw ImageServiceError.rateLimitExceeded('sightengine');
             }
           }

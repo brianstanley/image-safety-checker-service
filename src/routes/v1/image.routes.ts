@@ -67,8 +67,21 @@ router.get('/usage', async (req, res) => {
     res.json({
       success: true,
       data: {
-        sightengine: sightengineStats,
-        rekognition: rekognitionStats
+        sightengine: {
+          ...sightengineStats,
+          limits: {
+            daily: 250, // Effective daily limit (500 operations ÷ 2 models)
+            monthly: 1000 // Effective monthly limit (2000 operations ÷ 2 models)
+          },
+          note: "Each API call uses 2 models (nudity-2.1, gore-2.0), counting as 2 operations in SightEngine"
+        },
+        rekognition: {
+          ...rekognitionStats,
+          limits: {
+            daily: 1000,
+            monthly: 4000
+          }
+        }
       }
     });
   } catch (error) {

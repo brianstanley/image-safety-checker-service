@@ -198,8 +198,8 @@ Response:
 ## Usage Limits
 
 - Sightengine:
-  - Daily: 500 requests
-  - Monthly: 2000 requests
+  - Daily: 250 API calls (500 operations with 2 models per call)
+  - Monthly: 1000 API calls (2000 operations with 2 models per call)
 - AWS Rekognition:
   - Monthly: 4000 requests
 

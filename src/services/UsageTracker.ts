@@ -2,11 +2,15 @@ import { ServiceUsage } from '../models/ServiceUsage';
 import { SERVICES, ServiceType } from '../constants';
 
 export class UsageTracker {
-  private static readonly SIGHTENGINE_DAILY_LIMIT = 500;
-  private static readonly SIGHTENGINE_MONTHLY_LIMIT = 2000;
+  // SightEngine limits are based on operations, not API calls
+  // Each API call uses 2 models, so effective limits are:
+  // Daily: 500 operations ÷ 2 models = 250 calls
+  // Monthly: 2000 operations ÷ 2 models = 1000 calls
+  private static readonly SIGHTENGINE_DAILY_LIMIT = 250; // Effective daily limit for API calls
+  private static readonly SIGHTENGINE_MONTHLY_LIMIT = 1000; // Effective monthly limit for API calls
   private static readonly REKOGNITION_MONTHLY_LIMIT = 4000;
 
-  static async incrementUsage(service: ServiceType): Promise<void> {
+  static async incrementUsage(service: ServiceType, count: number = 1): Promise<void> {
     const now = new Date();
     const month = now.getMonth() + 1; // getMonth() returns 0-11
     const year = now.getFullYear();
@@ -20,7 +24,7 @@ export class UsageTracker {
         }
       },
       {
-        $inc: { count: 1 },
+        $inc: { count },
         $setOnInsert: { service, date: now, month, year }
       },
       { upsert: true, new: true }
