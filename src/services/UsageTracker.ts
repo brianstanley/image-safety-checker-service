@@ -7,7 +7,7 @@ export class UsageTracker {
   // Daily: 500 operations ÷ 2 models = 250 calls
   // Monthly: 2000 operations ÷ 2 models = 1000 calls
   private static readonly SIGHTENGINE_DAILY_LIMIT = 250; // Effective daily limit for API calls
-  private static readonly SIGHTENGINE_MONTHLY_LIMIT = 1000; // Effective monthly limit for API calls
+  private static readonly SIGHTENGINE_MONTHLY_LIMIT = 2000; // Effective monthly limit for API calls
   private static readonly REKOGNITION_MONTHLY_LIMIT = 4000;
 
   static async incrementUsage(service: ServiceType, count: number = 1): Promise<void> {
@@ -17,6 +17,12 @@ export class UsageTracker {
     
     // Create a date object for the current day only in UTC
     const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+    console.log('=== Incrementing Usage ===');
+    console.log('Service:', service);
+    console.log('Count to add:', count);
+    console.log('Date to save:', today.toISOString());
+    console.log('==========================');
 
     await ServiceUsage.findOneAndUpdate(
       {
@@ -37,6 +43,11 @@ export class UsageTracker {
     const year = now.getFullYear();
     const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
+    console.log('=== SightEngine Daily Limit Check ===');
+    console.log('Current time:', now.toISOString());
+    console.log('Today (UTC):', today.toISOString());
+    console.log('Today (local):', new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString());
+
     // Check daily limit
     const dailyUsage = await ServiceUsage.aggregate([
       {
@@ -52,6 +63,11 @@ export class UsageTracker {
         }
       }
     ]);
+
+    console.log('Daily usage query result:', dailyUsage);
+    console.log('Current usage:', dailyUsage.length > 0 ? dailyUsage[0].total : 0);
+    console.log('Daily limit:', this.SIGHTENGINE_DAILY_LIMIT);
+    console.log('Can use SightEngine:', dailyUsage.length === 0 || dailyUsage[0].total < this.SIGHTENGINE_DAILY_LIMIT);
 
     if (dailyUsage.length > 0 && dailyUsage[0].total >= this.SIGHTENGINE_DAILY_LIMIT) {
       return false;
@@ -73,6 +89,7 @@ export class UsageTracker {
         }
       }
     ]);
+    console.log("Monthly usage:", monthlyUsage)
 
     return !(monthlyUsage.length > 0 && monthlyUsage[0].total >= this.SIGHTENGINE_MONTHLY_LIMIT);
   }
@@ -109,6 +126,11 @@ export class UsageTracker {
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
     const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+    console.log('=== Getting Service Usage ===');
+    console.log('Service:', service);
+    console.log('Date for query:', today.toISOString());
+    console.log('============================');
 
     const [dailyUsage, monthlyUsage] = await Promise.all([
       ServiceUsage.aggregate([

@@ -166,6 +166,7 @@ class ImageService {
       const data = response.data;
 
       // Check for Sightengine-specific errors
+      console.log('Sightengine response:', data);
       if (data.error) {
         if (data.error === 'invalid_url') {
           throw ImageServiceError.imageNotFound(imageUrl, 'sightengine');
