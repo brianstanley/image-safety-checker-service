@@ -14,18 +14,18 @@ export class UsageTracker {
     const now = new Date();
     const month = now.getMonth() + 1; // getMonth() returns 0-11
     const year = now.getFullYear();
+    
+    // Create a date object for the current day only in UTC
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
     await ServiceUsage.findOneAndUpdate(
       {
         service,
-        date: {
-          $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-          $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-        }
+        date: today
       },
       {
         $inc: { count },
-        $setOnInsert: { service, date: now, month, year }
+        $setOnInsert: { service, date: today, month, year }
       },
       { upsert: true, new: true }
     );
@@ -35,16 +35,14 @@ export class UsageTracker {
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
     // Check daily limit
     const dailyUsage = await ServiceUsage.aggregate([
       {
         $match: {
           service: SERVICES.SIGHTENGINE,
-          date: {
-            $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-            $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-          }
+          date: today
         }
       },
       {
@@ -110,16 +108,14 @@ export class UsageTracker {
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
     const [dailyUsage, monthlyUsage] = await Promise.all([
       ServiceUsage.aggregate([
         {
           $match: {
             service,
-            date: {
-              $gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-              $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-            }
+            date: today
           }
         },
         {
